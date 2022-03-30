@@ -21,8 +21,8 @@ universes u v
   (obviously, not in these initial files that build up the representations though).
   
   A file that does need to explicitly deal with the fact that `bitstring` data is a list of bools should
-  mark `bitstring` as `reducible`
-  
+  mark `bitstring` as `reducible` ∘
+
   TODO: decide if this is actually a good design choice -/
 @[irreducible, derive [inhabited, has_to_string]]
 def bitstring := list bool

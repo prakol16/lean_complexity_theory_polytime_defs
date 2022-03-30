@@ -58,4 +58,21 @@ begin
   intro b, simp [ih], refl,
 end
 
+@[simp] lemma last_eq_none_iff {α : Type*} (ls : list α) :
+  ls.last' = none ↔ ls = [] :=
+begin
+  split, swap, { intro h, rw h, refl, },
+  contrapose, induction ls with hd tl ih, { simp, },
+  intro, cases tl, { simp, }, simpa using ih,
+end
+
+#check last_cons
+
+@[simp] lemma last'_cons {α : Type*} (hd : α) (tl : list α) (ht : tl ≠ []) :
+  (hd :: tl).last' = tl.last' :=
+by { induction tl, { cases ht rfl, }, simp, }
+
+lemma last_cons_is_some {α : Type*} (hd : α) (tl : list α) :
+  (hd :: tl).last'.is_some := by induction tl; simp [*]
+
 end list

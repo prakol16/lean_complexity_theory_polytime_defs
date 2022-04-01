@@ -66,13 +66,35 @@ begin
   intro, cases tl, { simp, }, simpa using ih,
 end
 
-#check last_cons
-
 @[simp] lemma last'_cons {α : Type*} (hd : α) (tl : list α) (ht : tl ≠ []) :
   (hd :: tl).last' = tl.last' :=
 by { induction tl, { cases ht rfl, }, simp, }
 
 lemma last_cons_is_some {α : Type*} (hd : α) (tl : list α) :
   (hd :: tl).last'.is_some := by induction tl; simp [*]
+
+@[simp] lemma drop_last {α : Type*} (ls : list α) (n : ℕ) (hn : n < ls.length) :
+  (ls.drop n).last' = ls.last' :=
+begin
+  induction ls with hd tl ih generalizing n, { simp, },
+  cases n, { simp, },
+  specialize ih n _, { simpa [nat.succ_eq_add_one] using hn, },
+  have : tl ≠ [], { intro h, subst h, simpa using hn, },
+  simp [this, ih],
+end
+
+example {α: Type} (hd : α) (tl : list α) (x : α) (hx : x ∈ tl.last') : x ∈ (hd :: tl).last' := mem_last'_cons hx
+
+lemma after_last {α : Type*} (ls : list α) (p : α → Prop) [decidable_pred p] :
+  ∀ x ∈ (ls.after p).last', x ∈ ls.last' :=
+begin
+  induction ls with hd tl ih, { simp [after], },
+  intros x hx,
+  by_cases h : p hd,
+  { simp [h, after, ← option.mem_def] at ⊢ hx, apply mem_last'_cons hx, },
+  specialize ih x _,
+  { simp [h, after] at hx, exact hx, },
+  apply mem_last'_cons ih,
+end
 
 end list

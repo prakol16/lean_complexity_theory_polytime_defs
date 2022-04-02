@@ -5,9 +5,9 @@ import log_lemmas
 open computability (encode_nat decode_nat)
 
 def time : code → ℕ →. ℕ
-| code.fst := λ v, pure (1 + nat.log 2 v)
-| code.snd := λ v, pure (1 + nat.log 2 v)
-| (code.bit _) := λ v, pure (1 + nat.log 2 v)
+| code.fst := λ v, pure (nat.log 2 v + 1)
+| code.snd := λ v, pure (nat.log 2 v + 1)
+| (code.bit _) := λ v, pure (nat.log 2 v + 1)
 | (code.pair c₁ c₂) := λ v, (+3) <$> (time c₁ v) + (time c₂ v)
 | (code.comp c₁ c₂) := λ v, (+1) <$> (time c₂ v) + (c₂.eval v >>= time c₁)
 | (code.case c₁ c₂ c₃) := λ v, (+1) <$> (match encode_nat v with
@@ -15,7 +15,7 @@ def time : code → ℕ →. ℕ
   | (ff :: xs) := time c₁ (decode_nat xs)
   | (tt :: xs) := time c₂ (decode_nat xs)
 end)
-| (code.fix f) := λ v₀, (@pfun.fix (ℕ × ℕ) ℕ $ 
+| (code.fix f) := λ v₀, (+1) <$> (@pfun.fix (ℕ × ℕ) ℕ $ 
   λ vt, (time f vt.1) >>= λ t',
     (f.eval vt.1).map (λ v' : ℕ,
       if v'.unpair'.1 = 0 then sum.inl (vt.2+t')
@@ -62,6 +62,9 @@ begin
     exact time_frespects_once_eval_aux _ ih, }
 end
 
+lemma exists_mem_time_iff_exists_mem_dom (c : code) (n : ℕ) : (∃ t, t ∈ time c n) ↔ ∃ m, m ∈ c.eval n :=
+by { rw [← part.dom_iff_mem, ← part.dom_iff_mem], apply time_dom_iff_eval_dom, }
+
 lemma time_frespects_once_eval (f : code) :
   pfun.frespects_once
   (λ (vt : ℕ × ℕ), (time f vt.1) >>= λ t',
@@ -107,17 +110,17 @@ begin
   ... ≤ (b₁ + b₂ + 3)^2 : by { ring_nf, nlinarith, }
 end
 
-lemma eval_le_time (c : code) {n m t : ℕ} (hm : m ∈ c.eval n) (ht : t ∈ time c n) : nat.log 2 m ≤ t^2 :=
+lemma eval_le_time {c : code} {n m t : ℕ} (hm : m ∈ c.eval n) (ht : t ∈ time c n) : nat.log 2 m ≤ t^2 :=
 begin
   induction c generalizing n m t,
   -- TODO: these 3 cases are very similar (only the last part is different),
   -- but iterate gives some weird error, figure out why
   case code.fst : { simp only [time, part.pure_eq_some, code.eval, part.mem_some_iff] at hm ht, subst ht, subst hm,
-    rw sq, exact (le_add_left (nat.log_le_log_of_le (nat.unpair'_fst_le n))).trans (nat.le_mul_self _), },
+    rw sq, exact (le_add_right (nat.log_le_log_of_le (nat.unpair'_fst_le n))).trans (nat.le_mul_self _), },
   case code.snd : { simp only [time, part.pure_eq_some, code.eval, part.mem_some_iff] at hm ht, subst ht, subst hm,
-    rw sq, exact (le_add_left (nat.log_le_log_of_le (nat.unpair'_snd_le n))).trans (nat.le_mul_self _), },
+    rw sq, exact (le_add_right (nat.log_le_log_of_le (nat.unpair'_snd_le n))).trans (nat.le_mul_self _), },
   case code.bit : b { simp only [time, part.pure_eq_some, code.eval, part.mem_some_iff, pfun.coe_val] at hm ht, subst ht, subst hm,
-    rw sq, refine trans _ (nat.le_mul_self _), cases n, { cases b; simp [nat.bit], }, simp, ring_nf, },
+    rw sq, refine trans _ (nat.le_mul_self _), cases n, { cases b; simp [nat.bit], }, simp, },
   case code.pair : c₁ c₂ c₁ih c₂ih
   { simp only [time, add_def, part.map_eq_map, part.pure_eq_some, part.bind_eq_bind, part.bind_some_eq_map, part.bind_map,
   part.mem_bind_iff, part.mem_map_iff, exists_prop, code.eval, part.ret_eq_some] at hm ht,
@@ -138,16 +141,61 @@ begin
     { rintros h ⟨t₁, ht₁, ht⟩, refine (c₁ih h ht₁).trans _, apply sq_mono, rw ← ht, simp, },
     { rintros h ⟨t₂, ht₂, ht⟩, refine (c₂ih h ht₂).trans _, apply sq_mono, rw ← ht, simp, }, },
   case code.fix : f ih
-  { simp only [time] at ht,
+  { simp only [time, part.mem_map_iff, part.map_eq_map] at ht,
+    rename t t_succ, obtain ⟨t, ht, ht_succ⟩ := ht,
     obtain ⟨⟨mL, tL⟩, htime, heval⟩ := pfun.frespects_last_step (time_frespects_once_eval f) ht hm,
     simp only [part.mem_map_iff, exists_prop, part.bind_eq_bind, part.mem_bind_iff] at htime heval,
     obtain ⟨m', hm', hmm'⟩ := heval, obtain ⟨tf, htf, m'', hm'', htL⟩ := htime,
     have : m' = m'' := part.mem_unique hm' hm'', subst this, clear hm'',
     split_ifs at hmm' htL, swap, { contradiction, },
-    specialize ih hm' htf,
     exact calc nat.log 2 m ≤ nat.log 2 m' : by { apply nat.log_monotone, rw ← hmm', exact nat.unpair'_snd_le _, }
-                      ...  ≤ tf^2 : ih
-                      ... ≤ t^2 : by { rw ← htL, mono, simp, }, },
+                      ...  ≤ tf^2 : ih hm' htf
+                      ...  ≤ t_succ^2 : by { rw [← ht_succ, ← htL], mono, apply le_add_right, simp, }, },
 end
 
+lemma one_le_time {c : code} {n t : ℕ} (ht : t ∈ time c n) : 1 ≤ t :=
+begin
+  cases c,
+  iterate 3 { simp [time] at ht, simp [ht], },
+  all_goals { simp only [time, add_def, part.map_eq_map, part.pure_eq_some, part.bind_eq_bind, part.bind_some_eq_map, part.bind_map,
+      part.mem_bind_iff, part.mem_map_iff, exists_prop] at ht, },
+  { obtain ⟨_, _, _, _, ht⟩ := ht, rw ← ht, nlinarith only, },
+  { obtain ⟨_, _, _, _, ht⟩ := ht, rw ← ht, nlinarith only, },
+  { obtain ⟨_, _, ht⟩ := ht, rw ← ht, nlinarith only, },
+  { obtain ⟨_, _, ht⟩ := ht, rw ← ht, nlinarith only, },
+end
+
+lemma time_bound_fst : time_bound code.fst (λ t, t+1) :=
+by { rw time_bound_of_monotonic_iff, { simp [time], }, { intros x y h, simpa }, }
+
+lemma time_bound_snd : time_bound code.snd (λ t, t+1) :=
+by { rw time_bound_of_monotonic_iff, { simp [time], }, { intros x y h, simpa }, }
+
+lemma time_bound_bit (b : bool) : time_bound (code.bit b) (λ t, t+1) :=
+by { rw time_bound_of_monotonic_iff, { simp [time], }, { intros x y h, simpa }, }
+
+lemma time_bound_pair {c₁ c₂ : code} {b₁ b₂ : ℕ → ℕ} (hb₁ : time_bound c₁ b₁) (hb₂ : time_bound c₂ b₂) :
+  time_bound (code.pair c₁ c₂) (λ t, (b₁ t) + (b₂ t) + 3) :=
+begin
+  intros n N h,
+  obtain ⟨t₁, ht₁, hb₁⟩ := hb₁ n N h, obtain ⟨t₂, ht₂, hb₂⟩ := hb₂ n N h,
+  use (t₁ + t₂ + 3), split,
+  { rw ← part.eq_some_iff at ht₁ ht₂, simp [time, ht₁, ht₂, add_def], ring, },
+  { mono*, },
+end
+
+lemma time_bound_comp {c₁ c₂ : code} {b₁ b₂ : ℕ → ℕ} (hb₁ : time_bound c₁ b₁) (hb₂ : time_bound c₂ b₂) :
+  time_bound (code.comp c₁ c₂) (λ t, (b₂ t) + (b₁ ((b₂ t)^2 + 1)) + 1) :=
+begin
+  intros n N h,
+  obtain ⟨t₂, ht₂, hb₂⟩ := hb₂ n N h,
+  obtain ⟨m, hm⟩ := (exists_mem_time_iff_exists_mem_dom c₂ n).mp ⟨_, ht₂⟩,
+  obtain ⟨t₁, ht₁, hb₁⟩ := hb₁ m (2^((b₂ $ nat.log 2 N)^2 + 1)) _,
+  { use t₁ + t₂ + 1, split,
+    { rw ← part.eq_some_iff at ht₁ ht₂ hm, simp [time, ht₁, ht₂, add_def, hm], ring, },
+    rw add_comm t₁ t₂, mono*, rwa nat.log_pow (show 1 < 2, by norm_num) at hb₁, },
+  apply le_of_lt, apply nat.lt_pow_succ_of_log_le, { norm_num },
+  exact calc nat.log 2 m ≤ t₂^2 : eval_le_time hm ht₂
+                     ... ≤ (b₂ $ nat.log 2 N)^2 : by mono,
+end
 

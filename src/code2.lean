@@ -55,12 +55,20 @@ by simp [code.id, nat.bit, ← nat.mkpair'_zero]
 def append_const : list bool → code
 | [] := code.id
 | (b :: bs) := bit b ∘ (append_const bs)
-@[simp] lemma append_const_apply (bs : list bool) (n : ℕ) :
+lemma append_const_apply (bs : list bool) (n : ℕ) :
   (append_const bs).eval n = part.some (bs.foldr nat.bit n) :=
 by { induction bs with _ _ ih, { simp [append_const], }, simp [append_const, ih], }
 lemma append_const_apply' (bs : list bool) (n : ℕ) (hn : n ≠ 0 ∨ bs.last'.get_or_else tt = tt) :
   (append_const bs).eval n = part.some (decode_nat (bs ++ encode_nat n)) :=
 by { cases hn, rw [append_const_apply, computability.append_bits _ hn], rw [append_const_apply, computability.append_bits' _ hn], }
+
+protected def code.const (c : ℕ) : code := (append_const (encode_nat c)) ∘ zero
+@[simp] lemma const_apply (c n : ℕ) : (code.const c).eval n = part.some c :=
+begin
+  simp only [code.const, code.eval, zero_apply, part.bind_eq_bind, part.bind_some],
+  rw append_const_apply', { simp, },
+  right, simp,
+end
 
 def to_bit : code := case one one zero
 @[simp] lemma to_bit_apply (n : ℕ) : to_bit.eval n = part.some (if n = 0 then 0 else 1) :=

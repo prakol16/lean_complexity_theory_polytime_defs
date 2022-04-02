@@ -11,6 +11,10 @@ These are useful in the `pfun` setting, not just Turing machine states.
 
 
 namespace pfun
+lemma exists_preimage_of_fix_dom {α β : Type*} {f : α →. β ⊕ α} {a : α} {b : β} (h : b ∈ f.fix a) :
+  ∃ a', sum.inl b ∈ f a' :=
+by apply fix_induction' _ _ h; tauto
+
 variables {α₁ α₂ β₁ β₂ : Type*}
 variables (f₁ : α₁ →. β₁ ⊕ α₁) (f₂ : α₂ →. β₂ ⊕ α₂)
 
@@ -67,6 +71,20 @@ begin
   { use vb, use this, exact e, },
   exfalso, specialize H ⟨va, _⟩, { use this, exact e, },
   obtain ⟨a₂', ha₂'⟩ := H, have := part.mem_unique hb₂ ha₂', contradiction,
+end
+
+lemma frespects_last_step {a : α₁} {b₁ : β₁} {b₂ : β₂} (hb₁ : b₁ ∈ f₁.fix a) (hb₂ : b₂ ∈ f₂.fix (F a)) :
+  ∃ a' : α₁, sum.inl b₁ ∈ f₁ a' ∧ sum.inl b₂ ∈ f₂ (F a') :=
+begin
+  revert hb₂,
+  apply fix_induction' _ _ hb₁; clear hb₁ a,
+  { intros a' ha' hb₂, use [a', ha'],
+    obtain ⟨b₂', hb₂'⟩ := (stop_iff_stop hF a').mp ⟨b₁, ha'⟩,
+    have : b₂ = b₂' := part.mem_unique hb₂ (fix_stop _ hb₂'), subst this,
+    assumption, },
+  intros a a' ha' ha ih hb₂,
+  refine ih _,
+  rwa ← fix_fwd _ _ ((hF a).2.1 _ ha),
 end
 
 variable (F)

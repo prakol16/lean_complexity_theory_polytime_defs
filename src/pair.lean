@@ -7,6 +7,7 @@ attribute [simp] computability.decode_encode_nat
 attribute [simp] nat.log_mul_base
 
 namespace nat
+
 @[simp] lemma log_base_mul (b n : ℕ) (hb : 1 < b) (hn : 0 < n) : log b (b * n) = (log b n) + 1 :=
 by { rw mul_comm, exact nat.log_mul_base b n hb hn, } 
 
@@ -15,6 +16,12 @@ begin
   suffices : log b ((b * n + x) / b * b) = log b n + 1, { simpa, },
   conv_lhs { rw [add_comm, add_mul_div_left _ _ (nat.zero_lt_one.trans hb), div_eq_of_lt hx], },
   simp [hb, hn],
+end
+
+@[simp] lemma log2_bit (n : ℕ) (hn : 0 < n) (b : bool) : log 2 (bit b n) = (log 2 n) + 1 :=
+begin
+  cases n, { simp at hn, contradiction, },
+  cases b; simp [nat.bit, nat.bit0_val n.succ, nat.bit1_val n.succ],
 end
 
 end nat
@@ -195,6 +202,16 @@ begin
   conv_rhs { rw nat.bit1_val }, rw [pow_add, mul_comm], linarith [ih],
 end
 
+@[simp] lemma decode_nat_zero_iff_nil (l : list bool) : decode_nat l = 0 ↔ l = [] :=
+begin
+  split, swap, { rintro rfl, simp, },
+  intro h,
+  by_contra H,
+  have := decode_nat_ub l H,
+  rw [h, nonpos_iff_eq_zero] at this,
+  apply pow_ne_zero _ _ this, trivial,
+end
+
 lemma decode_nat_mono (l₁ l₂ : list bool) (hl₁ : l₁.last'.get_or_else tt = tt) (h : l₁.length < l₂.length) :
   (decode_nat l₁) < (decode_nat l₂) :=
 begin
@@ -337,6 +354,9 @@ begin
   push_neg, simp [add_assoc],
 end
 
+lemma unpair'_fst_le (n : ℕ) : (unpair' n).1 ≤ n :=
+by { cases n, dec_trivial, exact le_of_lt (unpair'_fst_lt _), }
+
 lemma unpair'_snd_lt (n : ℕ) : (unpair' n.succ).2 < n.succ :=
 begin
   simp only [unpair'], conv_rhs { rw ← computability.decode_encode_nat n.succ, },
@@ -348,6 +368,9 @@ begin
     rw ← this, exact option.get_mem _, },
   apply list.unpair_snd_len_lt _ (computability.encode_nat_succ_ne_nil n),
 end
+
+lemma unpair'_snd_le (n : ℕ) : n.unpair'.2 ≤ n :=
+by { cases n, dec_trivial, exact le_of_lt (unpair'_snd_lt _), }
 
 @[simp] lemma unpair'_mkpair' (a b : ℕ) : unpair' (mkpair' a b) = (a, b) :=
 begin
@@ -362,10 +385,41 @@ by simp [mkpair', list.mkpair, list.mkpair', nat.bit]
 lemma mkpair'_one (a : ℕ) : mkpair' 1 a = bit0 (bit1 (bit1 (bit1 a))) :=
 by simp [mkpair', list.mkpair, list.mkpair', nat.bit]
 
+lemma mkpair'_ne_zero (a b : ℕ) : mkpair' a b ≠ 0 :=
+by simp [mkpair', list.mkpair, list.mkpair']
+
+lemma mkpair'_le (a b : ℕ) : nat.log 2 (mkpair' a b) ≤
+  log 2 a + log 2 b + 2 * log 2 (log 2 a + 1) + 5 :=
+begin
+  simp only [mkpair'],
+  exact calc log 2 (decode_nat (list.mkpair (encode_nat a) (encode_nat b)))
+        ≤ log 2 (2^((list.mkpair (encode_nat a) (encode_nat b)).length) - 1) :
+          by { apply log_monotone, zify [int.coe_nat_sub (one_le_iff_ne_zero.mpr (pow_ne_zero _ (show 2 ≠ 0, by norm_num)))], 
+               apply computability.decode_nat_lb, rw list.mkpair_last, simp, }
+    ...  ≤ (list.mkpair (encode_nat a) (encode_nat b)).length :
+          by { conv_rhs { rw ← log_pow (show 1 < 2, by norm_num) (list.mkpair _ _).length }, apply log_monotone, exact tsub_le_self, }
+    ... ≤ 2*(log 2 (encode_nat a).length) + (encode_nat a).length + (encode_nat b).length + 3 : list.mkpair_length_le _ _
+    ... ≤ 2*(log 2 (log 2 a + 1)) + (log 2 a + 1) + (log 2 b + 1) + 3 :
+          by { mono*, all_goals { try { apply log_monotone}, try { exact zero_le _, }, }, all_goals { exact computability.encode_nat_len_le _, }, }
+    ... = _ : by ring_nf
+end
+
+example (n : ℕ) : 1 ≤ n ↔ n ≠ 0 := one_le_iff_ne_zero
 
 def mklist (ls : list ℕ) : ℕ := ls.foldr nat.mkpair' 0
+def unlist : ℕ → list ℕ
+| 0 := []
+| (succ n) := have wf : (unpair' n.succ).2 < n.succ := unpair'_snd_lt n,
+              (unpair' n.succ).1 :: (unlist (unpair' n.succ).2)
 
-
+@[simp] lemma unlist_mklist (ls : list ℕ) : unlist (mklist ls) = ls :=
+begin
+  induction ls with h t ih, { simp [mklist, unlist], },
+  simp only [mklist, list.foldr],
+  cases e : mkpair' h _, { cases mkpair'_ne_zero _ _ e, },
+  simp only [unlist], rw ← e,
+  split; simp, exact ih,
+end
 
 end nat
 

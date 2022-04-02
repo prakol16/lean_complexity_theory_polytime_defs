@@ -31,7 +31,7 @@ parameter {ι}
   | (tt :: xs) := g.eval (decode_nat xs)
 end
 | (code.fix f) := pfun.fix $ λ v, (f.eval v).map $ λ v',
-  if (nat.unpair' v').1 = 0 then sum.inl (nat.unpair v').2 else sum.inr (nat.unpair v').2
+  if (nat.unpair' v').1 = 0 then sum.inl (nat.unpair' v').2 else sum.inr (nat.unpair' v').2
 
 end
 
@@ -104,7 +104,6 @@ begin
   cases v₁ h₁,
   { cases n; simp, }, simp,
 end
-
 
 end
 

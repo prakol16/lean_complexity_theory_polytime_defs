@@ -236,6 +236,17 @@ begin
   { apply decode_nat_mono, { rw H, simp, }, linarith only [h], },
 end
 
+lemma decode_nat_tail_lt (l : list bool) (hl : l ≠ []) : decode_nat l.tail < decode_nat l :=
+begin
+  rcases H : l.last' with _|_|_,
+  { rw list.last_eq_none_iff at H, contradiction, },
+  { rw decode_nat_invalid l H, apply decode_nat_quasimono, rw ← list.length_pos_iff_ne_nil at hl, simp, nlinarith, },
+  apply decode_nat_mono,
+  rcases e : l.tail.last' with _|_|_, { refl, }, { cases option.mem_unique (list.last'_of_tail e) H, }, { refl, },
+  rw ← list.length_pos_iff_ne_nil at hl, simp, nlinarith,
+end
+
+
 end computability
 
 namespace list

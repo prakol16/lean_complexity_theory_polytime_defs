@@ -70,6 +70,9 @@ end
   (hd :: tl).last' = tl.last' :=
 by { induction tl, { cases ht rfl, }, simp, }
 
+lemma last'_of_tail {α : Type*} {l : list α} {x : α} (hx : x ∈ l.tail.last') : x ∈ l.last' :=
+by { cases l with hd tl, { simp at hx, contradiction, }, cases tl, { simp at hx, contradiction, }, simpa using hx, } 
+
 lemma last_cons_is_some {α : Type*} (hd : α) (tl : list α) :
   (hd :: tl).last'.is_some := by induction tl; simp [*]
 

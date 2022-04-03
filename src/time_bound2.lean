@@ -199,3 +199,23 @@ begin
                      ... ≤ (b₂ $ nat.log 2 N)^2 : by mono,
 end
 
+lemma time_bound_case {c₁ c₂ c₃ : code} {b₁ b₂ b₃ : ℕ → ℕ} (hb₁ : time_bound c₁ b₁) (hb₂ : time_bound c₂ b₂) (hb₃ : time_bound c₃ b₃) :
+  time_bound (code.case c₁ c₂ c₃) (λ t, (max (max (b₁ t) (b₂ t)) (b₃ 0)) + 1) :=
+begin
+  intros n N h, 
+  rcases e : (encode_nat n) with _ |_|_,
+  { obtain ⟨t, ht, hb⟩ := hb₃ 0 0 rfl.le, use (t+1),
+    split, { simpa [time, e], }, norm_num at hb, mono, simp only [le_max_iff], right, assumption, },
+  { obtain ⟨t, ht, hb⟩ := hb₁ (decode_nat this_tl) N _, use t+1, split,
+    { simpa [time, e], }, { mono, simp only [le_max_iff], left, left, assumption, },
+    transitivity decode_nat (encode_nat n),
+    { apply le_of_lt, convert computability.decode_nat_tail_lt (encode_nat n) _; rw e; simp, },
+    simpa, },
+  { obtain ⟨t, ht, hb⟩ := hb₂ (decode_nat this_tl) N _, use t+1, split,
+    { simpa [time, e], }, { mono, simp only [le_max_iff], left, right, assumption, },
+    transitivity decode_nat (encode_nat n),
+    { apply le_of_lt, convert computability.decode_nat_tail_lt (encode_nat n) _; rw e; simp, },
+    simpa, },
+end
+
+

@@ -90,6 +90,10 @@ begin
   apply mono, exact nat.log_le_log_of_le hnm,
 end
 
+lemma time_bound_of_time_bound_le {c : code} {b₁ : ℕ → ℕ} (hb : time_bound c b₁) (b₂ : ℕ → ℕ) (b₁_le_b₂ : ∀ n, b₁ n ≤ b₂ n) :
+  time_bound c b₂ :=
+λ n N h, let ⟨t, ht, hb⟩ := hb n N h in ⟨t, ht, hb.trans (b₁_le_b₂ _)⟩
+
 /- Why isn't this already a lemma? -/
 lemma sq_mono : monotone (λ n : ℕ, n^2) := by { intros x y hxy, nlinarith, }
 
@@ -216,6 +220,13 @@ begin
     transitivity decode_nat (encode_nat n),
     { apply le_of_lt, convert computability.decode_nat_tail_lt (encode_nat n) _; rw e; simp, },
     simpa, },
+end
+
+lemma time_bound_case' {c₁ c₂ c₃ : code} {b₁ b₂ b₃ : ℕ → ℕ} (hb₁ : time_bound c₁ b₁) (hb₂ : time_bound c₂ b₂) (hb₃ : time_bound c₃ b₃) :
+  time_bound (code.case c₁ c₂ c₃) (λ t, (b₁ t) + (b₂ t) + (b₃ 0) + 1) :=
+begin
+  apply time_bound_of_time_bound_le (time_bound_case hb₁ hb₂ hb₃),
+  intro n, simp, split; nlinarith only,
 end
 
 

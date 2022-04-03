@@ -87,9 +87,6 @@ begin
   all_goals { simp only [encode_pos_num], cases encode_pos_num b₀, { cases ih, }, simp [ih], },
 end
 
-example (n : pos_num) : bit1 (num.pos n : num) = num.pos (bit1 n) := by { refl, }
-example (n : pos_num) : bit1 n = pos_num.bit1 n := pos_num.bit1_of_bit1 n
-
 lemma encode_num_bit0 (n : num) (hn : n ≠ 0): encode_num (bit0 n) = ff :: encode_num n :=
 begin
   cases n, { contradiction, },

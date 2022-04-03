@@ -1,5 +1,5 @@
 import data.polynomial.eval
-import time_bound2
+import time_bound
 
 def polytime (c : code) : Prop :=
 ∃ (p : polynomial ℕ), time_bound c (λ n, p.eval n)

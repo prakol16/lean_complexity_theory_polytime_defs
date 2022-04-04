@@ -8,6 +8,16 @@ open computability (encode_nat decode_nat)
 section
 parameter (ι : Type)
 
+/--
+A `code` is a description of an algorithm. The semantics are as follows:
+  - `fst` takes as input the encoding of a pair `(a, b)` and outputs `a`
+  - `snd` takes as input the encoding of a pair `(a, b)` and outputs `b`
+  - `bit` takes as input a natural number `n` and appends the bit `b` (in the least significant place)
+  - `pair` given `c₁` and `c₂`, the code which outputs the pair `(c₁(x), c₂(x))` on input `x`
+  - `comp` compose two codes
+  - `case` given `f g h`, calls `f` if the least significant bit (lsb) is `0`, `g` if it is `1`, and `h` if the number is `0`
+  - `fix` given `f`, repeatedly calls `f` on the input, interpreting the result as a tuple `(a, b)` until `a = 0`.
+-/
 inductive code
 | fst : code
 | snd : code
@@ -18,7 +28,6 @@ inductive code
 | fix : code → code
 
 parameter {ι}
-/-- Given an implementation `impl` of the oracles, we can evaluate the `code`. -/
 @[simp] def code.eval : code → ℕ →. ℕ
 | code.fst := λ n, part.some (nat.unpair' n).1
 | code.snd := λ n, part.some (nat.unpair' n).2
@@ -36,9 +45,14 @@ end
 end
 
 section
+/- In this section we define many useful starting codes, such as `code.id` and `code.const` 
+   These functions rely on the particular encoding of `nat.mkpair'`; the reason for this is to minimize
+   the number of primitive functions we need to put in `code`. Specifically, they take advantage of the fact
+   that we can split a sequence of bits into a tuple where the first entry has constant size by adding
+   some constant number of "header" bits. -/
+
 open code
-local notation `{` x `, ` y `}` := pair x y
-infixr `∘`:90 := comp
+local infixr `∘`:90 := comp
 
 def zero : code := fst ∘ (bit tt)
 @[simp] lemma zero_apply (n : ℕ) : zero.eval n = part.some 0 :=
@@ -70,6 +84,7 @@ begin
   right, simp,
 end
 
+/-- Clamps a natural number to {0, 1}. Returns `0` if the input is `0` and `1` otherwise -/
 def to_bit : code := case one one zero
 @[simp] lemma to_bit_apply (n : ℕ) : to_bit.eval n = part.some (if n = 0 then 0 else 1) :=
 begin
@@ -79,7 +94,7 @@ begin
   all_goals { intro, simp * at *, },
 end
 
-
+/-- Returns the right shift of a number `n` -/
 def tail : code := snd ∘ (bit ff) ∘ (bit tt) ∘ (bit tt)
 @[simp] lemma tail_apply_bit1 (n : ℕ) : tail.eval (bit1 n) = part.some n :=
 by simp [tail, nat.bit, ← nat.mkpair'_one]
@@ -89,7 +104,7 @@ begin
   simp [tail, nat.bit, nat.unpair', list.unpair, list.unpair', list.take_while, list.after],
 end
 
-/-- Slight hack, uses details of the encoding of `pair` -/
+/-- Evaluates `f` and `g` on the input;, then appends the bit `to_bit f` to `g` -/
 def cons_bit (f g : code) : code := (case (tail ∘ tail) (bit ff) zero) ∘ (pair (to_bit ∘ f) g)
 @[simp] lemma cons_bit_apply (f g : code) (n : ℕ) :
   (cons_bit f g).eval n = f.eval n >>= (λ r, (g.eval n).map (if r = 0 then bit0 else bit1)) :=

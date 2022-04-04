@@ -22,3 +22,17 @@ lemma polytime_comp {c₁ c₂ : code} : polytime c₁ → polytime c₂ → pol
 lemma polytime_case {c₁ c₂ c₃ : code} : polytime c₁ → polytime c₂ → polytime c₃ → polytime (code.case c₁ c₂ c₃)
 | ⟨p₁, e₁⟩ ⟨p₂, e₂⟩ ⟨p₃, e₃⟩ := by { use p₁ + p₂ + (p₃.eval 0) + 1, convert time_bound_case' e₁ e₂ e₃, simp, }
 
+lemma polytime_zero : polytime zero :=
+by { apply polytime_comp, apply polytime_fst, apply polytime_bit, }
+
+lemma polytime_tail : polytime tail :=
+polytime_comp polytime_snd (polytime_comp (polytime_bit _) (polytime_comp (polytime_bit _) (polytime_bit _)))
+
+lemma polytime_id : polytime code.id :=
+polytime_comp polytime_snd (polytime_bit _)
+
+lemma polytime_append_const (bs : list bool) : polytime (append_const bs) :=
+by { induction bs, { exact polytime_id, }, apply polytime_comp (polytime_bit _), assumption, }
+
+lemma polytime_const (n : ℕ) : polytime (code.const n) :=
+polytime_comp (polytime_append_const _) polytime_zero

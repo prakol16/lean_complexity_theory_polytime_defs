@@ -412,8 +412,6 @@ begin
     ... = _ : by ring_nf
 end
 
-example (n : ℕ) : 1 ≤ n ↔ n ≠ 0 := one_le_iff_ne_zero
-
 def mklist (ls : list ℕ) : ℕ := ls.foldr nat.mkpair' 0
 def unlist : ℕ → list ℕ
 | 0 := []

@@ -25,6 +25,9 @@ lemma polytime_case {c₁ c₂ c₃ : code} : polytime c₁ → polytime c₂ �
 lemma polytime_zero : polytime zero :=
 by { apply polytime_comp, apply polytime_fst, apply polytime_bit, }
 
+lemma polytime_one : polytime one :=
+polytime_comp (polytime_bit _) polytime_zero
+
 lemma polytime_tail : polytime tail :=
 polytime_comp polytime_snd (polytime_comp (polytime_bit _) (polytime_comp (polytime_bit _) (polytime_bit _)))
 
@@ -36,3 +39,13 @@ by { induction bs, { exact polytime_id, }, apply polytime_comp (polytime_bit _),
 
 lemma polytime_const (n : ℕ) : polytime (code.const n) :=
 polytime_comp (polytime_append_const _) polytime_zero
+
+lemma polytime_to_bit : polytime to_bit :=
+polytime_case polytime_one polytime_one polytime_zero
+
+lemma polytime_cons_bit {f g : code} (fp : polytime f) (gp : polytime g) : polytime (cons_bit f g) :=
+polytime_comp (polytime_case (polytime_comp polytime_tail polytime_tail) (polytime_bit _) polytime_zero)
+(polytime_pair (polytime_comp polytime_to_bit fp) gp)
+
+lemma polytime_ite {c f g : code} (cp : polytime c) (fp : polytime f) (gp : polytime g) : polytime (code.ite c f g) :=
+polytime_comp (polytime_case fp gp fp) (polytime_cons_bit cp polytime_id)

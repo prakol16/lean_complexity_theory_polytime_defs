@@ -412,21 +412,6 @@ begin
     ... = _ : by ring_nf
 end
 
-def mklist (ls : list ℕ) : ℕ := ls.foldr nat.mkpair' 0
-def unlist : ℕ → list ℕ
-| 0 := []
-| (succ n) := have wf : (unpair' n.succ).2 < n.succ := unpair'_snd_lt n,
-              (unpair' n.succ).1 :: (unlist (unpair' n.succ).2)
-
-@[simp] lemma unlist_mklist (ls : list ℕ) : unlist (mklist ls) = ls :=
-begin
-  induction ls with h t ih, { simp [mklist, unlist], },
-  simp only [mklist, list.foldr],
-  cases e : mkpair' h _, { cases mkpair'_ne_zero _ _ e, },
-  simp only [unlist], rw ← e,
-  split; simp, exact ih,
-end
-
 end nat
 
 

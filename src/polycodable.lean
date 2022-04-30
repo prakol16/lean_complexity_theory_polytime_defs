@@ -1,5 +1,5 @@
 import polytime
-open computability (encode_nat decode_nat)
+open num (to_bits of_bits)
 
 
 @[simp] def encode_option_nat : option ℕ → ℕ
@@ -8,7 +8,7 @@ open computability (encode_nat decode_nat)
 
 @[simp] def decode_option_nat : ℕ → option ℕ
 | 0 := none
-| n := some (decode_nat (encode_nat n).tail)
+| n := some (of_bits (to_bits n).tail)
 
 @[simp] lemma decode_option_nat_bit1 (n : ℕ) : decode_option_nat (bit1 n) = some n :=
 by { cases e : (bit1 n), { simp at e, contradiction, },
@@ -57,11 +57,11 @@ instance {α : Type} [polycodable α] : polycodable (option α) :=
     use (code.bit tt).comp (decode_option_code c), split,
     { apply polytime_comp (polytime_bit _), exact polytime_decode_option_code pc, },
     intro x, simp only [decode_option_code],
-    rcases e : (encode_nat x) with _|_|_,
-    { rw computability.encode_nat_nil_iff_zero at e, subst e, simp [nat.bit], },
+    rcases e : (to_bits x) with _|_|_,
+    { simp only [num.to_bits_nil_iff, nat.cast_eq_zero] at e, subst e, simp [nat.bit], },
     all_goals { have : x ≠ 0 := λ h, by { subst h, simpa using e, },
       simp [e, this, nat.bit, ec],
-      cases decode α (decode_nat this_tl); simp, },
+      cases decode α (of_bits this_tl); simp, },
   end  }
 
 def is_polytime {α β : Type} [polycodable α] [polycodable β] (f : α → β) : Prop :=
@@ -108,6 +108,8 @@ lemma is_polytime_decode (α : Type) [polycodable α] : is_polytime (decode α) 
 lemma is_polytime_const (β : Type) [polycodable β] (x : α) : is_polytime (λ _ : β, x) :=
 ⟨code.const (encode x), polytime_const _, λ x, by simp⟩ 
 
+section bool
+
 instance : polycodable bool :=
 polycodable.mk'
 (λ b, cond b 1 0) (λ n, some (if n = 0 then ff else tt)) (λ x, by cases x; simp)
@@ -120,6 +122,7 @@ lemma is_polytime_cond {c : α → bool} {f g : α → β} : is_polytime c → i
 lemma is_polytime_is_some (α : Type) [polycodable α] : is_polytime (@option.is_some α) :=
 ⟨to_bit, polytime_to_bit, λ x, by cases x; simp [polycodable.encode]⟩
 
+end bool
 
 section prod
 
@@ -179,8 +182,8 @@ end prod
 
 section option
 
-lemma is_polytime_elim {g : α → option β} {f : α × β → γ} {df : α → γ} :
-  is_polytime g → is_polytime f → is_polytime df → is_polytime (λ x, (g x).elim (df x) (λ x', f (x, x')))
+lemma is_polytime_elim {g : α → option β} {f : α → β → γ} {df : α → γ} :
+  is_polytime g → is_polytime₂ f → is_polytime df → is_polytime (λ x, (g x).elim (df x) (f x))
 | ⟨gc, gp, hg⟩ ⟨fc, fp, hf⟩ ⟨dfc, dfp, hdf⟩ :=
 ⟨code.ite gc dfc (fc.comp $ code.pair code.id (tail.comp gc)), 
   polytime_ite gp dfp (polytime_comp fp $ polytime_pair polytime_id (polytime_comp polytime_tail gp)),
@@ -193,35 +196,41 @@ end⟩
 lemma is_polytime_some : is_polytime (@some α) :=
 ⟨code.bit tt, polytime_bit _, by simp [encode, nat.bit]⟩
 
-lemma is_polytime_bind_option {f : α → option β} {g : α × β → option γ} (hf : is_polytime f) (hg : is_polytime g) :
-  is_polytime (λ x, (f x).bind (λ x', g (x, x'))) :=
+lemma is_polytime_bind_option {f : α → option β} {g : α → β → option γ} (hf : is_polytime f) (hg : is_polytime₂ g) :
+  is_polytime (λ x, (f x).bind (g x)) :=
 begin
-  convert_to is_polytime (λ x, (f x).elim none (λ x', g (x, x'))), { ext x : 1, cases f x; simp, },
+  convert_to is_polytime (λ x, (f x).elim none (g x)), { ext x : 1, cases f x; simp, },
   exact is_polytime_elim hf hg (is_polytime_const _ none),
 end
 
-lemma is_polytime_map_option {f : α → option β} {g : α × β → γ} (hf : is_polytime f) (hg : is_polytime g) :
-  is_polytime (λ x, (f x).map (λ x', g (x, x'))) :=
+lemma is_polytime_map_option {f : α → option β} {g : α → β → γ} (hf : is_polytime f) (hg : is_polytime₂ g) :
+  is_polytime (λ x, (f x).map (g x)) :=
 begin
-  change is_polytime (λ x, (f x).bind (λ x', (some ∘ g) (x, x'))), -- turns out, defeq !
+  change is_polytime (λ x, (f x).bind (some ∘ (g x))), -- turns out, defeq !
   exact is_polytime_bind_option hf (is_polytime_comp is_polytime_some hg),
 end
 
 end option
+
+section recursion
+
+
+
+end recursion
 
 section list
 
 def mklist (ls : list ℕ) : ℕ := ls.foldr nat.mkpair' 0
 def unlist : ℕ → list ℕ
 | 0 := []
-| (succ n) := have wf : (unpair' n.succ).2 < n.succ := unpair'_snd_lt n,
-              (unpair' n.succ).1 :: (unlist (unpair' n.succ).2)
+| (nat.succ n) := have wf : (nat.unpair' n.succ).2 < n.succ := nat.unpair'_snd_lt n,
+              (nat.unpair' n.succ).1 :: (unlist (nat.unpair' n.succ).2)
 
 @[simp] lemma unlist_mklist (ls : list ℕ) : unlist (mklist ls) = ls :=
 begin
   induction ls with h t ih, { simp [mklist, unlist], },
   simp only [mklist, list.foldr],
-  cases e : mkpair' h _, { cases mkpair'_ne_zero _ _ e, },
+  cases e : nat.mkpair' h _, { cases nat.mkpair'_ne_zero _ _ e, },
   simp only [unlist], rw ← e,
   split; simp, exact ih,
 end

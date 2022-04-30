@@ -4,6 +4,19 @@ import tactic
 
 namespace nat
 
+attribute [simp] log_mul_base
+
+@[simp] lemma log_base_mul (b n : ℕ) (hb : 1 < b) (hn : 0 < n) : log b (b * n) = log b n + 1 :=
+by { rw mul_comm, simp [hb, hn], }
+
+@[simp] lemma log_base_mul_add_lt_base (b n x : ℕ) (hb : 1 < b) (hn : 0 < n) (hx : x < b) :
+  log b (b * n + x) = (log b n) + 1 :=
+begin
+  suffices : log b ((b * n + x) / b * b) = log b n + 1, { simpa, },
+  conv_lhs { rw [add_comm, add_mul_div_left _ _ (nat.zero_lt_one.trans hb), div_eq_of_lt hx], },
+  simp [hb, hn],
+end
+
 lemma lt_pow_succ_log_self' {b : ℕ} (hb : 1 < b) (x : ℕ) : x < b^(log b x + 1) :=
 begin
   cases x, { simp, linarith, },

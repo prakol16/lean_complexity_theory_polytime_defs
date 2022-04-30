@@ -2,7 +2,7 @@ import code
 import frespects_pfun
 import log_lemmas
 
-open computability (encode_nat decode_nat)
+open num (to_bits of_bits)
 
 def time : code → ℕ →. ℕ
 | code.fst := λ v, pure (nat.log 2 v + 1)
@@ -10,10 +10,10 @@ def time : code → ℕ →. ℕ
 | (code.bit _) := λ v, pure (nat.log 2 v + 1)
 | (code.pair c₁ c₂) := λ v, (+3) <$> (time c₁ v) + (time c₂ v)
 | (code.comp c₁ c₂) := λ v, (+1) <$> (time c₂ v) + (c₂.eval v >>= time c₁)
-| (code.case c₁ c₂ c₃) := λ v, (+1) <$> (match encode_nat v with
+| (code.case c₁ c₂ c₃) := λ v, (+1) <$> (match to_bits v with
   | [] := time c₃ 0
-  | (ff :: xs) := time c₁ (decode_nat xs)
-  | (tt :: xs) := time c₂ (decode_nat xs)
+  | (ff :: xs) := time c₁ (of_bits xs)
+  | (tt :: xs) := time c₂ (of_bits xs)
 end)
 | (code.fix f) := λ v₀, (+1) <$> (@pfun.fix (ℕ × ℕ) ℕ $ 
   λ vt, (time f vt.1) >>= λ t',
@@ -56,7 +56,7 @@ begin
   case code.pair : c₁ c₂ c₁ih c₂ih { simp [time, add_def, c₁ih, c₂ih], },
   case code.comp : c₁ c₂ c₁ih c₂ih { simp [time, add_def, c₁ih, c₂ih], tauto, },
   case code.case : c₁ c₂ c₃ c₁ih c₂ih c₃ih { simp only [time, code.eval],
-    rcases (encode_nat n) with _|_|_; simp [c₁ih, c₂ih, c₃ih, time], },
+    rcases (to_bits n) with _|_|_; simp [c₁ih, c₂ih, c₃ih, time], },
   case code.fix : f ih
   { simp only [time, code.eval], refine pfun.eq_dom_of_frespects_once prod.fst _ _,
     exact time_frespects_once_eval_aux _ ih, }
@@ -123,7 +123,7 @@ begin
   case code.snd : { simp only [time, part.pure_eq_some, code.eval, part.mem_some_iff] at hm ht, subst ht, subst hm,
     rw sq, exact (le_add_right (nat.log_le_log_of_le (nat.unpair'_snd_le n))).trans (nat.le_mul_self _), },
   case code.bit : b { simp only [time, part.pure_eq_some, code.eval, part.mem_some_iff, pfun.coe_val] at hm ht, subst ht, subst hm,
-    rw sq, refine trans _ (nat.le_mul_self _), cases n, { cases b; simp [nat.bit], }, simp, },
+    rw sq, refine trans _ (nat.le_mul_self _), cases n, { cases b; simp [nat.bit], }, cases b; simp [nat.bit, nat.bit0_val n.succ, nat.bit1_val n.succ], },
   case code.pair : c₁ c₂ c₁ih c₂ih
   { simp only [time, add_def, part.map_eq_map, part.pure_eq_some, part.bind_eq_bind, part.bind_some_eq_map, part.bind_map,
   part.mem_bind_iff, part.mem_map_iff, exists_prop, code.eval, part.ret_eq_some] at hm ht,
@@ -139,7 +139,7 @@ begin
     simp, },
   case code.case : c₁ c₂ c₃ c₁ih c₂ih c₃ih
   { simp only [time, part.map_eq_map, part.mem_map_iff, exists_prop, code.eval] at hm ht,
-    rcases encode_nat n with _|_|_; simp only [time, code.eval],
+    rcases to_bits n with _|_|_; simp only [time, code.eval],
     { rintros h ⟨t₃, ht₃, ht⟩, refine (c₃ih h ht₃).trans _,  apply sq_mono, rw ← ht, simp, },
     { rintros h ⟨t₁, ht₁, ht⟩, refine (c₁ih h ht₁).trans _, apply sq_mono, rw ← ht, simp, },
     { rintros h ⟨t₂, ht₂, ht⟩, refine (c₂ih h ht₂).trans _, apply sq_mono, rw ← ht, simp, }, },
@@ -206,18 +206,18 @@ lemma time_bound_case {c₁ c₂ c₃ : code} {b₁ b₂ b₃ : ℕ → ℕ} (hb
   time_bound (code.case c₁ c₂ c₃) (λ t, (max (max (b₁ t) (b₂ t)) (b₃ 0)) + 1) :=
 begin
   intros n N h, 
-  rcases e : (encode_nat n) with _ |_|_,
+  rcases e : (to_bits n) with _ |_|_,
   { obtain ⟨t, ht, hb⟩ := hb₃ 0 0 rfl.le, use (t+1),
     split, { simpa [time, e], }, norm_num at hb, mono, simp only [le_max_iff], right, assumption, },
-  { obtain ⟨t, ht, hb⟩ := hb₁ (decode_nat this_tl) N _, use t+1, split,
+  { obtain ⟨t, ht, hb⟩ := hb₁ (of_bits this_tl) N _, use t+1, split,
     { simpa [time, e], }, { mono, simp only [le_max_iff], left, left, assumption, },
-    transitivity decode_nat (encode_nat n),
-    { apply le_of_lt, convert computability.decode_nat_tail_lt (encode_nat n) _; rw e; simp, },
+    transitivity (of_bits (to_bits n) : ℕ),
+    { apply le_of_lt, apply num.of_bits_strict_mono, rw e, simp, },
     simpa, },
-  { obtain ⟨t, ht, hb⟩ := hb₂ (decode_nat this_tl) N _, use t+1, split,
+  { obtain ⟨t, ht, hb⟩ := hb₂ (of_bits this_tl) N _, use t+1, split,
     { simpa [time, e], }, { mono, simp only [le_max_iff], left, right, assumption, },
-    transitivity decode_nat (encode_nat n),
-    { apply le_of_lt, convert computability.decode_nat_tail_lt (encode_nat n) _; rw e; simp, },
+    transitivity (of_bits (to_bits n) : ℕ),
+    { apply le_of_lt, apply num.of_bits_strict_mono, rw e, simp, },
     simpa, },
 end
 

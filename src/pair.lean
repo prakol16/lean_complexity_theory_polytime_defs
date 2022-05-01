@@ -7,6 +7,7 @@ Authors: Praneeth Kolichala
 import to_bits
 import data.list.basic
 import lists
+import tactic
 
 /-!
 # Efficient Pairing

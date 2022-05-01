@@ -76,7 +76,7 @@ def is_polytime {α β : Type} [polycodable α] [polycodable β] (f : α → β)
 
 variables {α β γ : Type} [polycodable α] [polycodable β] [polycodable γ]
 
-lemma encode_decode_is_polytime : is_polytime (λ x : ℕ, (decode α x).map encode) :=
+lemma encode_decode_is_polytime (α : Type) [polycodable α] : is_polytime (λ x : ℕ, (decode α x).map encode) :=
 by simpa [is_polytime, polycodable.encode] using poly α
 
 lemma is_polytime_iff (f : α → β) :
@@ -107,6 +107,25 @@ lemma is_polytime_decode (α : Type) [polycodable α] : is_polytime (decode α) 
 
 lemma is_polytime_const (β : Type) [polycodable β] (x : α) : is_polytime (λ _ : β, x) :=
 ⟨code.const (encode x), polytime_const _, λ x, by simp⟩ 
+
+section equiv
+
+def polycodable_of_equiv {β : Type} (eqv : α ≃ β) : polycodable β :=
+polycodable.mk'
+  (λ b, (polycodable.encode (eqv.symm b)))
+  (λ n, (polycodable.decode α n).map eqv)
+  (λ b, by simp)
+  (by { convert encode_decode_is_polytime α, ext b : 1, cases decode α b; simp, })
+
+lemma is_polytime_of_equiv_symm {β : Type} (eqv : α ≃ β)
+  {f : α → γ} (hf : is_polytime f) : @is_polytime β γ (polycodable_of_equiv eqv) _ (f ∘ eqv.symm) :=
+by { rcases hf with ⟨c, pc, hc⟩, use c, split, { assumption, }, intro x, exact hc (eqv.symm x), }
+
+lemma is_polytime_of_equiv {β : Type} (eqv : α ≃ β)
+  {f : γ → α} (hf : is_polytime f) : @is_polytime γ β _ (polycodable_of_equiv eqv) (eqv ∘ f) :=
+by { rcases hf with ⟨c, pc, hc⟩, use c, split, { assumption, }, intro x, rw hc x, simp [encode], }
+
+end equiv
 
 section bool
 
@@ -176,9 +195,31 @@ is_polytime_comp hf (is_polytime_pair hg hh)
 @[simp] lemma function.uncurry_prod_mk (α β : Type*) : function.uncurry (@prod.mk α β) = id :=
 by ext x; cases x; simp
 
+lemma is_polytime₂_ignore_fst {f : α → β} (h : is_polytime f) : is_polytime₂ (λ x : γ, f) :=
+by { have := is_polytime_comp h (polytime_prod_snd _ _), exact this, }
+
 lemma is_polytime_prod_mk : is_polytime₂ (@prod.mk α β) := ⟨code.id, polytime_id, λ x, by simp⟩
 
 end prod
+
+section bool
+
+lemma is_polytime_band : is_polytime₂ band :=
+begin
+  convert_to is_polytime₂ (λ b₁ b₂, cond b₁ b₂ ff),
+  { ext b₁ b₂, cases b₁; cases b₂; refl, },
+  apply is_polytime_cond,
+  exacts [polytime_prod_fst _ _, polytime_prod_snd _ _, is_polytime_const _ _],
+end
+
+lemma is_polytime_bor : is_polytime₂ bor :=
+begin
+  convert_to is_polytime₂ (λ b₁ b₂, cond b₁ tt b₂), { ext b₁ b₂, cases b₁; cases b₂; refl, },
+  apply is_polytime_cond,
+  exacts [polytime_prod_fst _ _,  is_polytime_const _ _, polytime_prod_snd _ _],
+end
+
+end bool
 
 section option
 
@@ -196,6 +237,9 @@ end⟩
 lemma is_polytime_some : is_polytime (@some α) :=
 ⟨code.bit tt, polytime_bit _, by simp [encode, nat.bit]⟩
 
+lemma is_polytime_of_is_polytime_some {f : α → β} (hf : is_polytime (some ∘ f)) : is_polytime f :=
+by { rcases hf with ⟨c, pc, hc⟩, use [tail.comp c, polytime_comp polytime_tail pc], intro x, simp [hc x, encode], }
+
 lemma is_polytime_bind_option {f : α → option β} {g : α → β → option γ} (hf : is_polytime f) (hg : is_polytime₂ g) :
   is_polytime (λ x, (f x).bind (g x)) :=
 begin
@@ -212,11 +256,123 @@ end
 
 end option
 
-section recursion
+section embedding
 
+def polycodable_of_embedding {β : Type} (e : β → α) (f : α → option β)
+  (h : ∀ x, f (e x) = some x) (poly : is_polytime (λ x, (f x).map e)) : polycodable β :=
+polycodable.mk' 
+(λ x, encode (e x))
+(λ n, decode α n >>= f)
+(λ x, by simp [h])
+begin
+  convert_to is_polytime (λ n, decode α n >>= (λ x, ((f x).map e).map encode)),
+  { ext n : 1, cases decode α n; simp, },
+  apply is_polytime_bind_option, { exact is_polytime_decode _, },
+  apply is_polytime₂_ignore_fst, apply is_polytime_map_option poly,
+  apply is_polytime₂_ignore_fst, apply is_polytime_encode,
+end
 
+lemma is_polytime_of_embedding_inclusion {β : Type} {e : β → α} {f : α → option β}
+  {h : ∀ x, f (e x) = some x} {poly : is_polytime (λ x, (f x).map e)} : 
+  by { haveI := polycodable_of_embedding e f h poly, exact (is_polytime e), } :=
+by { use [code.id, polytime_id], intro, simp, }
 
-end recursion
+lemma is_polytime_of_embedding_inverse {β : Type} {e : β → α} {f : α → option β}
+  {h : ∀ x, f (e x) = some x} {poly : is_polytime (λ x, (f x).map e)} :
+  by { haveI := polycodable_of_embedding e f h poly, exact (is_polytime f), } :=
+by { rcases poly with ⟨c, pc, hc⟩, use [c, pc], intro x, simp [hc x, encode], refl, }
+
+end embedding
+
+section subtype
+
+def is_polytime_pred (p : α → Prop) [decidable_pred p] : Prop :=
+is_polytime (λ x : α, (p x : bool))
+
+lemma is_polytime_ite {p : α → Prop} [decidable_pred p] (hp : is_polytime_pred p) {f g : α → β}
+  (hf : is_polytime f) (hg : is_polytime g) : is_polytime (λ x, if p x then f x else g x) :=
+begin
+  convert_to is_polytime (λ x, cond (p x) (f x) (g x)), { ext x, split_ifs with h; simp [h], },
+  apply is_polytime_cond; assumption,
+end
+
+def polycodable_subtype {p : α → Prop} [decidable_pred p] (hp : is_polytime_pred p) :
+  polycodable {x // p x} :=
+polycodable_of_embedding
+  (λ x, (x : α))
+  (λ x, if h : p x then some ⟨x, h⟩ else none) 
+  (λ x, by simpa [imp_false] using subtype.prop x)
+begin
+  convert_to is_polytime (λ x, if p x then some x else none), { ext x : 1, split_ifs; simp, },
+  exact is_polytime_ite hp is_polytime_some (is_polytime_const _ _),
+end
+
+end subtype
+
+section sigma
+
+private def sum_as_tuple : α ⊕ β → bool × ℕ
+| (sum.inl a) := (ff, encode a)
+| (sum.inr b) := (tt, encode b)
+
+private def tuple_as_sum (n : bool × ℕ) : option (α ⊕ β) :=
+cond n.1 ((decode β n.2).map sum.inr) ((decode α n.2).map sum.inl)
+
+instance : polycodable (α ⊕ β) :=
+polycodable_of_embedding sum_as_tuple tuple_as_sum
+  (λ x, by cases x; simp [sum_as_tuple, tuple_as_sum])
+begin
+  convert_to is_polytime (λ n : bool × ℕ, cond n.1 ((decode β n.2).map (λ x, (tt, encode x)))
+    ((decode α n.2).map (λ x, (ff, encode x)))),
+  { ext n : 1, cases n with b v, cases b; simp [tuple_as_sum]; congr, },
+  apply is_polytime_cond (polytime_prod_fst _ _),
+  change is_polytime₂ (λ (b : bool) (n : ℕ), (decode β n).map (λ x, (tt, encode x))),
+  { apply is_polytime₂_ignore_fst, apply is_polytime_map_option, apply is_polytime_decode, 
+    apply is_polytime₂_ignore_fst, apply is_polytime₂_comp is_polytime_prod_mk, apply is_polytime_const,
+    apply is_polytime_encode, },
+  change is_polytime₂ (λ (b : bool) (n : ℕ), (decode α n).map (λ x, (ff, encode x))),
+  { apply is_polytime₂_ignore_fst, apply is_polytime_map_option, apply is_polytime_decode, 
+    apply is_polytime₂_ignore_fst, apply is_polytime₂_comp is_polytime_prod_mk, apply is_polytime_const,
+    apply is_polytime_encode, },
+end
+
+private lemma is_polytime_sum_as_tuple : is_polytime (@sum_as_tuple α β _ _) := is_polytime_of_embedding_inclusion
+private lemma is_polytime_tuple_as_sum : is_polytime (@tuple_as_sum α β _ _) := is_polytime_of_embedding_inverse
+
+lemma is_polytime_sum_inl : is_polytime (@sum.inl α β) :=
+begin
+  apply is_polytime_of_is_polytime_some,
+  convert_to is_polytime (λ a : α, (tuple_as_sum (ff, encode a) : option (α ⊕ β)) ),
+  { ext a : 1, simp [tuple_as_sum], },
+  apply is_polytime_comp is_polytime_tuple_as_sum,
+  apply is_polytime₂_comp is_polytime_prod_mk, { apply is_polytime_const, }, apply is_polytime_encode,
+end
+
+lemma is_polytime_sum_inr : is_polytime (@sum.inr α β) :=
+begin
+  apply is_polytime_of_is_polytime_some,
+  convert_to is_polytime (λ b : β, (tuple_as_sum (tt, encode b) : option (α ⊕ β)) ),
+  { ext b : 1, simp [tuple_as_sum], },
+  apply is_polytime_comp is_polytime_tuple_as_sum,
+  apply is_polytime₂_comp is_polytime_prod_mk, { apply is_polytime_const, }, apply is_polytime_encode,
+end
+
+lemma is_polytime_sum_elim {δ : Type} [polycodable δ] {f : δ → α → γ} (g : δ → β → γ) {h : δ → α ⊕ β } 
+  (hf : is_polytime₂ f) (hg : is_polytime₂ g) (hh : is_polytime h) :
+  is_polytime (λ x, (h x).elim (f x) (g x)) :=
+begin
+  apply is_polytime_of_is_polytime_some,
+  convert_to is_polytime (λ x : δ, cond (sum_as_tuple $ h x).1 ((decode β $ (sum_as_tuple $ h x).2).map (g x)) 
+    ((decode α $ (sum_as_tuple $ h x).2).map (f x))),
+  { ext x : 1, simp only [function.comp_app], cases h x; simp [sum_as_tuple], },
+  apply is_polytime_cond, { apply is_polytime_comp (polytime_prod_fst _ _), apply is_polytime_comp is_polytime_sum_as_tuple hh, },
+  { apply is_polytime_map_option, apply is_polytime_comp (is_polytime_decode _), apply is_polytime_comp (polytime_prod_snd _ _),
+    apply is_polytime_comp is_polytime_sum_as_tuple hh, exact hg, },
+  apply is_polytime_map_option, apply is_polytime_comp (is_polytime_decode _), apply is_polytime_comp (polytime_prod_snd _ _),
+  apply is_polytime_comp is_polytime_sum_as_tuple hh, exact hf,
+end
+
+end sigma
 
 section list
 
@@ -234,6 +390,12 @@ begin
   simp only [unlist], rw ← e,
   split; simp, exact ih,
 end
+
+section recursion
+
+
+
+end recursion
 
 
 end list
